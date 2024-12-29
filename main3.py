@@ -46,7 +46,7 @@ keyword_focus = st.selectbox(
      ]
 )
 
-topic = st.text_input("Topic", placeholder="Topic, e.g. churn for SaaS", value='Beating the ATS')
+topic = st.text_input("Topic", placeholder="Topic, e.g. churn for SaaS")
 if not topic:
     topic = 'General topics based on above selections.'
 
