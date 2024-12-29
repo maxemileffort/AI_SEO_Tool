@@ -31,13 +31,13 @@ st.header("Enter Business Details")
 # instead of items, like sections or drafts.
 error_ct = 0
 
-business_name = st.text_input("Business Name", placeholder="Enter the business name", value='TailorJD')
-business_description = st.text_area("Business Description", placeholder="Describe your business", value='AI Job coaching and resume writing')
-business_type = st.text_input("Business Type", placeholder="e.g., SaaS, E-commerce, Service", value='SaaS')
-niche = st.text_input("Niche", placeholder="e.g., Technology, Health, Education", value='resume writing and job coaching')
-target_audience = st.text_input("Target Audience", placeholder="Describe your target audience", value='job seekers and career changers')
-features_page = st.text_input("Features Page", placeholder="https://www.yoursite.com/features", value='https://tailorjd.com/features')
-money_page = st.text_input("Money Page", placeholder="https://www.yoursite.com/pricing", value='https://tailorjd.com/pricing')
+business_name = st.text_input("Business Name", placeholder="Enter the business name")
+business_description = st.text_area("Business Description", placeholder="Describe your business")
+business_type = st.text_input("Business Type", placeholder="e.g., SaaS, E-commerce, Service")
+niche = st.text_input("Niche", placeholder="e.g., Technology, Health, Education")
+target_audience = st.text_input("Target Audience", placeholder="Describe your target audience")
+features_page = st.text_input("Features Page", placeholder="https://www.yoursite.com/features")
+money_page = st.text_input("Money Page", placeholder="https://www.yoursite.com/pricing")
 
 keyword_focus = st.selectbox(
     "Keyword Focus", 
