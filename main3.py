@@ -24,6 +24,23 @@ llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini")
 # Streamlit app title
 st.title("AI SEO Content Generator")
 
+# Initialize session state for input fields and results
+if "inputs" not in st.session_state:
+    st.session_state["inputs"] = {
+        "business_name": "",
+        "business_description": "",
+        "business_type": "",
+        "niche": "",
+        "target_audience": "",
+        "features_page": "",
+        "money_page": "",
+        "keyword_focus": "",
+        "topic": "",
+    }
+
+if "results" not in st.session_state:
+    st.session_state["results"] = {}
+
 # Create inputs for the landing page
 st.header("Enter Business Details")
 
@@ -31,24 +48,22 @@ st.header("Enter Business Details")
 # instead of items, like sections or drafts.
 error_ct = 0
 
-business_name = st.text_input("Business Name", placeholder="Enter the business name")
-business_description = st.text_area("Business Description", placeholder="Describe your business")
-business_type = st.text_input("Business Type", placeholder="e.g., SaaS, E-commerce, Service")
-niche = st.text_input("Niche", placeholder="e.g., Technology, Health, Education")
-target_audience = st.text_input("Target Audience", placeholder="Describe your target audience")
-features_page = st.text_input("Features Page", placeholder="https://www.yoursite.com/features")
-money_page = st.text_input("Money Page", placeholder="https://www.yoursite.com/pricing")
+business_name = st.text_input("Business Name", placeholder="Enter the business name", value=st.session_state["inputs"]["business_name"], key="business_name")
+business_description = st.text_area("Business Description", placeholder="Describe your business", value=st.session_state["inputs"]["business_description"], key="business_description")
+business_type = st.text_input("Business Type", placeholder="e.g., SaaS, E-commerce, Service", value=st.session_state["inputs"]["business_type"], key="business_type")
+niche = st.text_input("Niche", placeholder="e.g., Technology, Health, Education", value=st.session_state["inputs"]["niche"], key="niche")
+target_audience = st.text_input("Target Audience", placeholder="Describe your target audience", value=st.session_state["inputs"]["target_audience"], key="target_audience")
+features_page = st.text_input("Features Page", placeholder="https://www.yoursite.com/features", value=st.session_state["inputs"]["features_page"], key="features_page")
+money_page = st.text_input("Money Page", placeholder="https://www.yoursite.com/pricing", value=st.session_state["inputs"]["money_page"], key="money_page")
 
 keyword_focus = st.selectbox(
     "Keyword Focus", 
-    ["Bottom of Funnel with high buying intent", 
-     "Top of Funnel for building domain authority", 
-     ]
+    ["", "Bottom of Funnel with high buying intent", "Top of Funnel for building domain authority"],
+    index=["", "Bottom of Funnel with high buying intent", "Top of Funnel for building domain authority"].index(st.session_state["inputs"]["keyword_focus"]),
+    key="keyword_focus"
 )
 
-topic = st.text_input("Topic", placeholder="Topic, e.g. churn for SaaS")
-if not topic:
-    topic = 'General topics based on above selections.'
+topic = st.text_input("Topic", placeholder="Topic, e.g. churn for SaaS", value=st.session_state["inputs"]["topic"], key="topic")
 
 # Define prompt templates
 final_system_prompt = "You are a helpful Search Engine Optimization AI assistant."
@@ -211,6 +226,20 @@ def export_to_word(data, filename):
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
 
+def export_to_txt_files(drafts, base_filename):
+    """Export each draft in drafts to a separate TXT file."""
+    for i, draft in enumerate(drafts):
+        file_content = draft
+        file_name = f"{base_filename}_draft_{i + 1}.txt"
+        txt_data = StringIO()
+        txt_data.write(file_content)
+        st.download_button(
+            label=f"Download Draft {i + 1}",
+            data=txt_data.getvalue(),
+            file_name=file_name,
+            mime="text/plain"
+        )
+
 # Some other helper functions for taking drafts to more developed articles
 def extract_sections(draft_content):
     """Use LangChain to extract sections from a draft."""
@@ -259,188 +288,230 @@ def refine_section(section, seo_data):
     chain = refine_prompt | llm | StrOutputParser()
     return chain.invoke({"section": section, "final_seo_data": final_seo_data})
 
+# Display results if available
+today_str = datetime.datetime.today().strftime('%Y-%m-%d')
+if "results" in st.session_state and st.session_state["results"]:
+    st.write("## Results")
+    for key, value in st.session_state["results"].items():
+        st.write(f"## {key}")
+        st.write(value)
+
+    st.write("### Export Options")
+    export_to_csv(st.session_state["results"], f"{business_name}_seo_strategy_{today_str}.csv")
+    export_to_word(st.session_state["results"], f"{business_name}_seo_strategy_{today_str}.docx")
+    export_to_txt_files(st.session_state["results"]['Drafts'], f"{business_name}_seo_strategy_{today_str}")
+
 # Submit button
-if st.button("Generate SEO Strategy"):
-    # Store input values into a dictionary for processing
-    user_inputs = {
-        "business_name": business_name,
-        "business_description": business_description,
-        "business_type": business_type,
-        "niche": niche,
-        "target_audience": target_audience,
-        "keyword_focus": keyword_focus,
-        "topic": topic,
-    }
+if not st.session_state.get("results"):
+    if st.button("Generate SEO Strategy"):
 
-    try:
-        # Step 1: Generate Foundation SEO Strategy
-        foundation_chain = foundation_template | llm | StrOutputParser()
-        foundation_content = foundation_chain.invoke(user_inputs)
-
-        st.write("## Foundation SEO Strategy")
-        st.write(foundation_content)
-
-        # Step 2: Extract Pillar Page Ideas
-        pillar_extraction_chain = {"foundation_content": foundation_chain} | pillar_extraction_template | llm | StrOutputParser()
-        pillar_page_ideas = pillar_extraction_chain.invoke(user_inputs)
-        pillar_page_ideas = pillar_page_ideas.replace('[', '').replace(']', '')
-        pillar_page_ideas = pillar_page_ideas.replace('`', '').replace('"', '').replace("'", '')
-        pillar_page_ideas = pillar_page_ideas.replace('python', '').replace('\n', '')
-        pillar_page_ideas = [i.strip() for i in pillar_page_ideas.split(',')]
-        st.write("## Extracted Pillar Page Ideas")
-        st.write(pillar_page_ideas)
-
-        # Step 3: Generate Keywords
-        keywords_chain = {"foundation_content": foundation_chain} | keywords_template | llm | StrOutputParser()
-        keywords_result = keywords_chain.invoke(user_inputs)
-        st.write("## Keywords with Secondary Keywords")
-        st.write(keywords_result)
-
-        # Step 4: Generate Pillar Page Subtopics
-        pillars_chain = {"foundation_content": foundation_chain} | pillars_template | llm | StrOutputParser()
-        pillars_result = pillars_chain.invoke(user_inputs)
-        st.write("## Pillar Pages with Subtopics")
-        st.write(pillars_result)
-
-        # Step 5: Generate Audience Questions
-        questions_chain = {"foundation_content": foundation_chain} | questions_template | llm | StrOutputParser()
-        questions_result = questions_chain.invoke(user_inputs)
-        st.write("## Audience Questions")
-        st.write(questions_result)
-
-        # print(pillar_page_ideas)
-
-        # Step 6: Loop over Pillar Page Ideas for Outlines using Threads
-        outlines_only = []
-
-        def generate_outline(index,idea):
-            outline_chain = outline_template | llm | StrOutputParser()
-            outline_dict = {
-                "pillar_page_idea": idea,
-                "foundation_content": foundation_content,
-                "keywords": keywords_result,
-                "questions": questions_result,
-            }
-            outline_result = outline_chain.invoke(outline_dict)
-            outlines_only.append((index, outline_result))
-
-        threads = []
-        for i, idea in enumerate(pillar_page_ideas):
-            thread = threading.Thread(target=generate_outline, args=(i,idea))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
-        # Sort outlines by their original order
-        outlines_only.sort(key=lambda x: x[0])
-        outlines_only = [outline for _, outline in outlines_only]
-
-        st.write("## Generated Outlines")
-        for i, outline in enumerate(outlines_only):
-            st.write(f"### Outline for Pillar Page Idea {i + 1}")
-            st.write(outline)
-
-        # Step 7: Loop over outlines to generate first drafts
-        firstdrafts_only = []
-
-        def generate_firstdraft(index,outline):
-            firstdraft_chain = firstdraft_template | llm | StrOutputParser()
-            firstdraft_dict = {
-                "outline": outline,
-                "business_name": foundation_content,
-                "business_description": business_description,
-                "features_page": features_page,
-                "money_page": money_page,
-            }
-            firstdraft_result = firstdraft_chain.invoke(firstdraft_dict)
-            firstdrafts_only.append((index, firstdraft_result))
-
-        threads = []
-        for i, outline in enumerate(outlines_only):
-            thread = threading.Thread(target=generate_firstdraft, args=(i,outline))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
-        # Sort outlines by their original order
-        firstdrafts_only.sort(key=lambda x: x[0])
-        firstdrafts_only = [draft for _, draft in firstdrafts_only]
-
-        st.write("## Generated Drafts")
-        for i, draft in enumerate(firstdrafts_only):
-            st.write(f"### Draft for Pillar Page Idea {i + 1}")
-            st.write(draft)
-
-        # TODO: this articles step has really odd behavior. The outputs are shuffled 
-        # and sometimes they seem to be talking about something else.
-        # # Step 8: Loop over drafts to generate articles
-        # articles_only = []
-        # def refine_draft(idx, draft):
-        #     """Process an entire draft, refining each section and combining them."""
-        #     sections = extract_sections(draft)
-        #     print(sections)
-        #     refined_sections = []
-
-        #     def refine_worker(section, index):
-        #         seo_data = [foundation_content, '\n'.join(pillar_page_ideas), pillars_result, keywords_result, questions_result]
-        #         refined_sections.append((index, refine_section(section, seo_data)))
-
-        #     threads = []
-        #     for i, section in enumerate(sections):
-        #         thread = threading.Thread(target=refine_worker, args=(section, i))
-        #         threads.append(thread)
-        #         thread.start()
-
-        #     for thread in threads:
-        #         thread.join()
-
-        #     # Sort sections by original order
-        #     refined_sections.sort(key=lambda x: x[0])
-        #     articles_only.append((idx, "\n\n".join([content for _, content in refined_sections])))
-        #     return "\n\n".join([content for _, content in refined_sections])
-
-        # threads = []
-        # for i, draft in enumerate(firstdrafts_only):
-        #     thread = threading.Thread(target=refine_draft, args=(i,draft))
-        #     threads.append(thread)
-        #     thread.start()
-
-        # for thread in threads:
-        #     thread.join()
-
-        # # Sort articles by their original order
-        # articles_only.sort(key=lambda x: x[0])
-        # articles_only = [article for _, article in articles_only]
-
-        # st.write("## Generated Articles")
-        # for i, article in enumerate(articles_only):
-        #     st.write(f"### Article for Pillar Page Idea {i + 1}")
-        #     st.write(article)
-
-        # Export Results
-        all_results = {
-            "Foundation SEO Strategy": foundation_content,
-            "Pillar Page Ideas": "\n".join(pillar_page_ideas),
-            "Keywords": keywords_result,
-            "Pillar Subtopics": pillars_result,
-            "Audience Questions": questions_result,
-            "Outlines": "\n".join(outlines_only),
-            "Drafts": "\n".join(firstdrafts_only),
-            # "Articles": "\n".join(articles_only),
+        # Store input values into a dictionary for processing
+        user_inputs = {
+            "business_name": business_name,
+            "business_description": business_description,
+            "business_type": business_type,
+            "niche": niche,
+            "target_audience": target_audience,
+            "keyword_focus": keyword_focus,
+            "topic": topic,
+            "features_page": features_page,
+            "money_page": money_page,
         }
 
-        st.write("### Export Options")
-        today_str = datetime.datetime.today().strftime('%Y-%m-%d')
-        export_to_csv(all_results, f"{business_name}_seo_strategy_{today_str}.csv")
-        export_to_word(all_results, f"{business_name}_seo_strategy_{today_str}.docx")
+        # Store inputs in session state
+        st.session_state["inputs"] = user_inputs
 
-    except Exception as e:
-        st.error(f"Error processing the prompts: {e}")
-        error_ct += 1
-        if error_ct > 100:
-            print("Exiting due to high number of errors.")
-            sys.exit()
+        try:
+            # Step 1: Generate Foundation SEO Strategy
+            foundation_chain = foundation_template | llm | StrOutputParser()
+            foundation_content = foundation_chain.invoke(user_inputs)
+
+            # st.write("## Foundation SEO Strategy")
+            # st.write(foundation_content)
+            st.write("Step 1 of 7 done.")
+
+            # Step 2: Extract Pillar Page Ideas
+            pillar_extraction_chain = {"foundation_content": foundation_chain} | pillar_extraction_template | llm | StrOutputParser()
+            pillar_page_ideas = pillar_extraction_chain.invoke(user_inputs)
+            pillar_page_ideas = pillar_page_ideas.replace('[', '').replace(']', '')
+            pillar_page_ideas = pillar_page_ideas.replace('`', '').replace('"', '').replace("'", '')
+            pillar_page_ideas = pillar_page_ideas.replace('python', '').replace('\n', '')
+            pillar_page_ideas = [i.strip() for i in pillar_page_ideas.split(',')]
+            # st.write("## Extracted Pillar Page Ideas")
+            # st.write(pillar_page_ideas)
+            st.write("Step 2 of 7 done.")
+
+            # Step 3: Generate Keywords
+            keywords_chain = {"foundation_content": foundation_chain} | keywords_template | llm | StrOutputParser()
+            keywords_result = keywords_chain.invoke(user_inputs)
+            # st.write("## Keywords with Secondary Keywords")
+            # st.write(keywords_result)
+            st.write("Step 3 of 7 done.")
+
+            # Step 4: Generate Pillar Page Subtopics
+            pillars_chain = {"foundation_content": foundation_chain} | pillars_template | llm | StrOutputParser()
+            pillars_result = pillars_chain.invoke(user_inputs)
+            # st.write("## Pillar Pages with Subtopics")
+            # st.write(pillars_result)
+            st.write("Step 4 of 7 done.")
+
+            # Step 5: Generate Audience Questions
+            questions_chain = {"foundation_content": foundation_chain} | questions_template | llm | StrOutputParser()
+            questions_result = questions_chain.invoke(user_inputs)
+            # st.write("## Audience Questions")
+            # st.write(questions_result)
+            st.write("Step 5 of 7 done.")
+
+            # print(pillar_page_ideas)
+
+            # Step 6: Loop over Pillar Page Ideas for Outlines using Threads
+            outlines_only = []
+
+            def generate_outline(index,idea):
+                outline_chain = outline_template | llm | StrOutputParser()
+                outline_dict = {
+                    "pillar_page_idea": idea,
+                    "foundation_content": foundation_content,
+                    "keywords": keywords_result,
+                    "questions": questions_result,
+                }
+                outline_result = outline_chain.invoke(outline_dict)
+                outlines_only.append((index, outline_result))
+
+            threads = []
+            for i, idea in enumerate(pillar_page_ideas):
+                thread = threading.Thread(target=generate_outline, args=(i,idea))
+                threads.append(thread)
+                thread.start()
+
+            for thread in threads:
+                thread.join()
+
+            # Sort outlines by their original order
+            outlines_only.sort(key=lambda x: x[0])
+            outlines_only = [outline for _, outline in outlines_only]
+
+            # st.write("## Generated Outlines")
+            # for i, outline in enumerate(outlines_only):
+            #     st.write(f"### Outline for Pillar Page Idea {i + 1}")
+            #     st.write(outline)
+            st.write("Step 6 of 7 done.")
+
+            # Step 7: Loop over outlines to generate first drafts
+            firstdrafts_only = []
+
+            def generate_firstdraft(index,outline):
+                firstdraft_chain = firstdraft_template | llm | StrOutputParser()
+                firstdraft_dict = {
+                    "outline": outline,
+                    "business_name": foundation_content,
+                    "business_description": business_description,
+                    "features_page": features_page,
+                    "money_page": money_page,
+                }
+                firstdraft_result = firstdraft_chain.invoke(firstdraft_dict)
+                firstdrafts_only.append((index, firstdraft_result))
+
+            threads = []
+            for i, outline in enumerate(outlines_only):
+                thread = threading.Thread(target=generate_firstdraft, args=(i,outline))
+                threads.append(thread)
+                thread.start()
+
+            for thread in threads:
+                thread.join()
+
+            # Sort outlines by their original order
+            firstdrafts_only.sort(key=lambda x: x[0])
+            firstdrafts_only = [draft for _, draft in firstdrafts_only]
+
+            # st.write("## Generated Drafts")
+            # for i, draft in enumerate(firstdrafts_only):
+            #     st.write(f"### Draft for Pillar Page Idea {i + 1}")
+            #     st.write(draft)
+            st.write("Step 7 of 7 done.")
+
+            # TODO: this articles step has really odd behavior. The outputs are shuffled 
+            # and sometimes they seem to be talking about something else.
+            # # Step 8: Loop over drafts to generate articles
+            # articles_only = []
+            # def refine_draft(idx, draft):
+            #     """Process an entire draft, refining each section and combining them."""
+            #     sections = extract_sections(draft)
+            #     print(sections)
+            #     refined_sections = []
+
+            #     def refine_worker(section, index):
+            #         seo_data = [foundation_content, '\n'.join(pillar_page_ideas), pillars_result, keywords_result, questions_result]
+            #         refined_sections.append((index, refine_section(section, seo_data)))
+
+            #     threads = []
+            #     for i, section in enumerate(sections):
+            #         thread = threading.Thread(target=refine_worker, args=(section, i))
+            #         threads.append(thread)
+            #         thread.start()
+
+            #     for thread in threads:
+            #         thread.join()
+
+            #     # Sort sections by original order
+            #     refined_sections.sort(key=lambda x: x[0])
+            #     articles_only.append((idx, "\n\n".join([content for _, content in refined_sections])))
+            #     return "\n\n".join([content for _, content in refined_sections])
+
+            # threads = []
+            # for i, draft in enumerate(firstdrafts_only):
+            #     thread = threading.Thread(target=refine_draft, args=(i,draft))
+            #     threads.append(thread)
+            #     thread.start()
+
+            # for thread in threads:
+            #     thread.join()
+
+            # # Sort articles by their original order
+            # articles_only.sort(key=lambda x: x[0])
+            # articles_only = [article for _, article in articles_only]
+
+            # st.write("## Generated Articles")
+            # for i, article in enumerate(articles_only):
+            #     st.write(f"### Article for Pillar Page Idea {i + 1}")
+            #     st.write(article)
+
+            # Export Results
+            all_results = {
+                "Foundation SEO Strategy": foundation_content,
+                "Pillar Page Ideas": "\n".join(pillar_page_ideas),
+                "Keywords": keywords_result,
+                "Pillar Subtopics": pillars_result,
+                "Audience Questions": questions_result,
+                "Outlines": "\n".join(outlines_only),
+                "Drafts": "\n".join(firstdrafts_only),
+                # "Articles": "\n".join(articles_only),
+            }
+
+            try:
+                # Perform processing and generate results (same as before)
+                # Store results in session state
+                st.session_state["results"] = all_results
+            except Exception as e:
+                st.error(f"Error processing the prompts: {e}")
+
+            # Display results if available
+            if "results" in st.session_state and st.session_state["results"]:
+                st.write("## Results")
+                for key, value in st.session_state["results"].items():
+                    st.write(f"## {key}")
+                    st.write(value)
+
+            st.write("### Export Options")
+            # today_str = datetime.datetime.today().strftime('%Y-%m-%d')
+            export_to_csv(all_results, f"{business_name}_seo_strategy_{today_str}.csv")
+            export_to_word(all_results, f"{business_name}_seo_strategy_{today_str}.docx")
+            export_to_txt_files(firstdrafts_only, f"{business_name}_seo_strategy_{today_str}")
+
+        except Exception as e:
+            st.error(f"Error processing the prompts: {e}")
+            error_ct += 1
+            if error_ct > 100:
+                print("Exiting due to high number of errors.")
+                sys.exit()
